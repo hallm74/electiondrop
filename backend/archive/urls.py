@@ -15,6 +15,7 @@ router.register("claim-citations", views.ClaimCitationViewSet, basename="claim-c
 router.register("document-relationships", views.RelationshipViewSet, basename="document-relationship")
 
 urlpatterns = [
+    path("topics/", views.topics, name="topics"),
     path("", include(router.urls)),
     path("search/", views.search, name="search"),
     path("statistics/", views.statistics, name="statistics"),

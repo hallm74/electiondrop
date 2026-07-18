@@ -126,3 +126,19 @@ class RelationshipAndApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response["Content-Disposition"].startswith("attachment;"))
         response.close()
+
+    def test_topics_include_curated_burisma_topic(self):
+        self.page.extracted_text = "A source passage mentions Ukraine and Burisma."
+        self.page.save(update_fields=("extracted_text", "preferred_searchable_text"))
+        response = self.client.get("/api/topics/")
+        self.assertEqual(response.status_code, 200)
+        topic = next(item for item in response.data if item["slug"] == "burisma-ukraine")
+        self.assertEqual(topic["document_count"], 1)
+        self.assertEqual(topic["mention_count"], 2)
+
+    def test_topic_search_expands_curated_aliases(self):
+        self.page.extracted_text = "A source passage mentions Burisma."
+        self.page.save(update_fields=("extracted_text", "preferred_searchable_text"))
+        response = self.client.get("/api/search/", {"topic": "burisma-ukraine"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["results"][0]["stable_page_id"], self.page.stable_page_id)

@@ -15,6 +15,7 @@ from .serializers import (
     DocumentSerializer, EntityMentionSerializer, EntitySerializer, PageSerializer,
     SearchResultSerializer, SourceFileSerializer,
 )
+from .topics import TOPICS, get_topic
 
 
 class ReadOnlyUnlessStaff(permissions.BasePermission):
@@ -122,11 +123,58 @@ def plain_excerpt(text, query, length=260):
     return ("…" if start else "") + excerpt + ("…" if start + length < len(text) else "")
 
 
+def topic_page_query(topic):
+    query = Q()
+    for alias in topic["aliases"]:
+        query |= Q(preferred_searchable_text__icontains=alias)
+        query |= Q(logical_page_number=1, document__title__icontains=alias)
+    if topic["collection_slugs"]:
+        query |= Q(
+            logical_page_number=1,
+            document__collection__slug__in=topic["collection_slugs"],
+        )
+    return query
+
+
+@api_view(("GET",))
+@permission_classes((permissions.AllowAny,))
+def topics(request):
+    documents = list(
+        Document.objects.select_related("collection").prefetch_related("pages")
+    )
+    results = []
+    for topic in TOPICS:
+        matching_documents = set()
+        mention_count = 0
+        for document in documents:
+            title = document.title.lower()
+            page_text = "\n".join(page.preferred_searchable_text for page in document.pages.all()).lower()
+            searchable_text = f"{title}\n{page_text}"
+            alias_mentions = sum(searchable_text.count(alias.lower()) for alias in topic["aliases"])
+            collection_match = document.collection.slug in topic["collection_slugs"]
+            if alias_mentions or collection_match:
+                matching_documents.add(document.pk)
+                mention_count += alias_mentions
+        results.append({
+            "slug": topic["slug"],
+            "label": topic["label"],
+            "document_count": len(matching_documents),
+            "mention_count": mention_count,
+        })
+    return Response(results)
+
+
 @api_view(("GET",))
 @permission_classes((permissions.AllowAny,))
 def search(request):
     query_text = request.query_params.get("q", "").strip()
     pages = Page.objects.select_related("document__collection", "document")
+    topic_slug = request.query_params.get("topic", "").strip()
+    if topic_slug:
+        topic = get_topic(topic_slug)
+        if not topic:
+            return Response({"detail": "Unknown topic."}, status=400)
+        pages = pages.filter(topic_page_query(topic))
     filters_map = {
         "collection": "document__collection__slug",
         "agency": "document__originating_agency",

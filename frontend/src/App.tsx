@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'reac
 import { Link, NavLink, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, Copy, Download, ExternalLink, FileSearch, Filter, Menu, Search, ShieldCheck, X } from 'lucide-react'
 import { api, getApiLoading, subscribeApiLoading } from './api'
-import type { Collection, Document, Page, SearchResult } from './types'
+import type { Collection, Document, Page, SearchResult, Topic } from './types'
 
 const collectionFallback: Collection[] = [
   { id: 1, slug: 'vulnerabilities', code: 'VULN', title: 'Vulnerabilities in Electronic Voting and Ballot-Counting Systems', description: 'Primary-source records concerning reported technical vulnerabilities in election technology. A vulnerability does not, by itself, establish exploitation or an altered vote.', source_url: '', display_order: 1, document_count: 0, page_count: 0 },
@@ -66,6 +66,7 @@ function ProvenanceBadge({ source }: { source: string }) {
 function HomePage() {
   const collections = useLoad(() => api.collections().then(x => x.results), [], collectionFallback)
   const stats = useLoad(api.stats, [], { totals: { source_files: 0, documents: 0, pages: 0, searchable_pages: 0 }, recent_documents: [] })
+  const topics = useLoad(api.topics, [], [])
   const totals = stats.data?.totals || {}
   return <>
     <section className="hero">
@@ -80,6 +81,8 @@ function HomePage() {
       {[['Source files', totals.source_files], ['Documents', totals.documents], ['Pages', totals.pages], ['Searchable pages', totals.searchable_pages]].map(([label, value]) => <div key={String(label)}><strong>{Number(value || 0).toLocaleString()}</strong><span>{label}</span></div>)}
       {stats.error && <small className="offline-note">Waiting for the local archive service</small>}
     </section>
+
+    <TopicCloud topics={topics.data || []} />
 
     <section className="collections-section">
       <div className="section-heading"><div><span className="kicker">THE SOURCE COLLECTIONS</span><h2>Four bodies of evidence</h2></div><p>Each collection preserves its original source context while exposing document- and page-level records for review.</p></div>
@@ -105,6 +108,31 @@ function HomePage() {
       {stats.data?.recent_documents?.length ? <div className="document-list">{stats.data.recent_documents.map(doc => <DocumentRow key={doc.stable_id} document={doc} />)}</div> : <EmptyArchive />}
     </section>
   </>
+}
+
+function TopicCloud({ topics }: { topics: Topic[] }) {
+  const visible = topics.filter(topic => topic.document_count > 0)
+  const maximum = Math.max(...visible.map(topic => topic.document_count), 1)
+  return <section className="topic-cloud-section">
+    <div className="topic-cloud-heading">
+      <div><span className="kicker">FOLLOW THE LANGUAGE</span><h2>What keeps appearing<br /><em>in the record?</em></h2></div>
+      <p>Topics are curated from the released material and sized by matching documents—not repetition on a single page. Select one to open every matching source page.</p>
+    </div>
+    <div className="topic-cloud" aria-label="Recurring archive topics">
+      {visible.map((topic, index) => {
+        const scale = Math.sqrt(topic.document_count / maximum)
+        const size = 15 + scale * 35
+        return <Link
+          className={`topic-word ${topic.slug === 'burisma-ukraine' ? 'featured' : ''}`}
+          style={{ fontSize: `${size}px` }}
+          to={`/search?topic=${encodeURIComponent(topic.slug)}`}
+          title={`${topic.document_count} documents · ${topic.mention_count} mentions`}
+          key={topic.slug}
+        ><span>{topic.label}</span><small>{topic.document_count}</small>{index < visible.length - 1 && <i>·</i>}</Link>
+      })}
+    </div>
+    <div className="topic-cloud-note"><span></span>Size reflects matching documents <b>·</b> Counts update as OCR and review continue</div>
+  </section>
 }
 
 function EmptyArchive() {

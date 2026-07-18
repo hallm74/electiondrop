@@ -25,4 +25,8 @@ export type SearchResult = {
   document_date: string | null; extraction_method: string; reviewed: boolean; page_url: string;
 }
 
+export type Topic = {
+  slug: string; label: string; document_count: number; mention_count: number;
+}
+
 export type Paginated<T> = { count: number; next: string | null; previous: string | null; results: T[] }

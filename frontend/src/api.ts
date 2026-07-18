@@ -1,4 +1,4 @@
-import type { Collection, Document, Page, Paginated, SearchResult } from './types'
+import type { Collection, Document, Page, Paginated, SearchResult, Topic } from './types'
 
 export const API = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api').replace(/\/$/, '')
 
@@ -78,6 +78,7 @@ export const api = {
   pages: (id: string) => request<Page[]>(`/documents/${id}/pages/`),
   search: (params: URLSearchParams) => request<Paginated<SearchResult>>(`/search/?${params}`),
   stats: () => request<{ totals: Record<string, number>; recent_documents: Document[] }>('/statistics/'),
+  topics: () => request<Topic[]>('/topics/'),
   entity: (slug: string) => request<any>(`/entities/${slug}/`),
   claims: (slug: string) => request<any>(`/claims/${slug}/`),
   sourcePreview: (id: number) => `${API}/source-files/${id}/download/`,
