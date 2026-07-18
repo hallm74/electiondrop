@@ -29,4 +29,19 @@ export type Topic = {
   slug: string; label: string; document_count: number; mention_count: number;
 }
 
+export type RedactionFinding = {
+  id: number; stable_page_id: string; page_number: number; document_id: string; document_title: string;
+  collection_title: string; source_sha256: string; method: string; method_label: string;
+  recovered_text: string; public_explanation: string; technical_basis: string;
+  coordinates: number[]; page_url: string;
+}
+
+export type RedactionAudit = {
+  audit: {
+    completed_on: string; source_count: number; confirmed_finding_count: number;
+    status: 'no_confirmed_failures' | 'confirmed_findings'; summary: string;
+  };
+  results: RedactionFinding[];
+}
+
 export type Paginated<T> = { count: number; next: string | null; previous: string | null; results: T[] }

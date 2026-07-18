@@ -177,6 +177,38 @@ class Page(models.Model):
         return self.stable_page_id
 
 
+class RedactionFinding(models.Model):
+    class Method(models.TextChoices):
+        LIVE_ANNOTATION = "live_annotation", "Live redaction annotation"
+        OPAQUE_OVERLAY = "opaque_overlay", "Opaque overlay over text"
+        HIDDEN_TEXT = "hidden_text", "Hidden text layer"
+        PRIOR_REVISION = "prior_revision", "Earlier PDF revision"
+        EMBEDDED_CONTENT = "embedded_content", "Embedded content"
+        OTHER = "other", "Other verified method"
+
+    page = models.ForeignKey(Page, on_delete=models.CASCADE, related_name="redaction_findings")
+    method = models.CharField(max_length=30, choices=Method.choices)
+    recovered_text = models.TextField()
+    public_explanation = models.TextField()
+    technical_basis = models.TextField(blank=True)
+    coordinates = models.JSONField(default=list, blank=True)
+    review_state = models.CharField(max_length=20, choices=ReviewState.choices, default=ReviewState.UNREVIEWED)
+    published = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("page__document__stable_id", "page__logical_page_number", "id")
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(published=False) | models.Q(review_state=ReviewState.REVIEWED),
+                name="published_redaction_finding_is_reviewed",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.page.stable_page_id} - {self.get_method_display()}"
+
+
 class EditorialMetadata(models.Model):
     document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="metadata_entries")
     field_name = models.CharField(max_length=100)

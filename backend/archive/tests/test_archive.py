@@ -9,7 +9,7 @@ from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
 from archive.importer import ImportRejected, import_path, safe_extract_zip, sha256_file
-from archive.models import Claim, ClaimCitation, Collection, Document, Page, SourceFile
+from archive.models import Claim, ClaimCitation, Collection, Document, Page, RedactionFinding, SourceFile
 
 
 def make_pdf(path: Path, text="Election archive fixture page"):
@@ -141,4 +141,32 @@ class RelationshipAndApiTests(TestCase):
         self.page.save(update_fields=("extracted_text", "preferred_searchable_text"))
         response = self.client.get("/api/search/", {"topic": "burisma-ukraine"})
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["results"][0]["stable_page_id"], self.page.stable_page_id)
+
+    def test_redaction_audit_reports_no_unreviewed_findings(self):
+        RedactionFinding.objects.create(
+            page=self.page,
+            method="hidden_text",
+            recovered_text="Unverified candidate",
+            public_explanation="Pending review.",
+        )
+        response = self.client.get("/api/redaction-audit/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["audit"]["status"], "no_confirmed_failures")
+        self.assertEqual(response.data["results"], [])
+
+    def test_redaction_audit_exposes_only_reviewed_published_text(self):
+        finding = RedactionFinding.objects.create(
+            page=self.page,
+            method="opaque_overlay",
+            recovered_text="Text preserved beneath the overlay.",
+            public_explanation="The PDF paints an opaque rectangle over extractable source text.",
+            technical_basis="Overlay sequence follows the text drawing operation.",
+            review_state="reviewed",
+            published=True,
+        )
+        response = self.client.get("/api/redaction-audit/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["audit"]["confirmed_finding_count"], 1)
+        self.assertEqual(response.data["results"][0]["id"], finding.pk)
         self.assertEqual(response.data["results"][0]["stable_page_id"], self.page.stable_page_id)

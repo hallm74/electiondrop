@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from .models import (
     Claim, ClaimCitation, Collection, Document, DocumentRelationship, Entity,
-    EntityMention, Page, SourceFile,
+    EntityMention, Page, RedactionFinding, SourceFile,
 )
 
 
@@ -58,6 +58,28 @@ class PageSerializer(serializers.ModelSerializer):
             return ""
         request = self.context.get("request")
         return request.build_absolute_uri(obj.page_image.url) if request else obj.page_image.url
+
+
+class RedactionFindingSerializer(serializers.ModelSerializer):
+    stable_page_id = serializers.CharField(source="page.stable_page_id", read_only=True)
+    page_number = serializers.IntegerField(source="page.logical_page_number", read_only=True)
+    document_id = serializers.CharField(source="page.document.stable_id", read_only=True)
+    document_title = serializers.CharField(source="page.document.title", read_only=True)
+    collection_title = serializers.CharField(source="page.document.collection.title", read_only=True)
+    source_sha256 = serializers.CharField(source="page.source_file.sha256", read_only=True)
+    method_label = serializers.CharField(source="get_method_display", read_only=True)
+    page_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = RedactionFinding
+        fields = (
+            "id", "stable_page_id", "page_number", "document_id", "document_title",
+            "collection_title", "source_sha256", "method", "method_label", "recovered_text",
+            "public_explanation", "technical_basis", "coordinates", "page_url",
+        )
+
+    def get_page_url(self, obj):
+        return f"/documents/{obj.page.document.stable_id}/pages/{obj.page.logical_page_number}"
 
 
 class EntitySerializer(serializers.ModelSerializer):

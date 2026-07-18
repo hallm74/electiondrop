@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { Link, NavLink, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, Copy, Download, ExternalLink, FileSearch, Filter, Menu, Search, ShieldCheck, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, Copy, Download, ExternalLink, FileSearch, Filter, Menu, ScanSearch, Search, ShieldCheck, X } from 'lucide-react'
 import { api, getApiLoading, subscribeApiLoading } from './api'
-import type { Collection, Document, Page, SearchResult, Topic } from './types'
+import type { Collection, Document, Page, RedactionAudit, SearchResult, Topic } from './types'
 
 const collectionFallback: Collection[] = [
   { id: 1, slug: 'vulnerabilities', code: 'VULN', title: 'Vulnerabilities in Electronic Voting and Ballot-Counting Systems', description: 'Primary-source records concerning reported technical vulnerabilities in election technology. A vulnerability does not, by itself, establish exploitation or an altered vote.', source_url: '', display_order: 1, document_count: 0, page_count: 0 },
@@ -34,14 +34,14 @@ function Header() {
       </Link>
       <button className="menu-button" onClick={() => setOpen(!open)} aria-label="Toggle navigation">{open ? <X /> : <Menu />}</button>
       <nav className={open ? 'open' : ''}>
-        <NavLink to="/collections">Collections</NavLink><NavLink to="/search">Search documents</NavLink><a href="/about">Methodology</a>
+        <NavLink to="/collections">Collections</NavLink><NavLink to="/search">Search documents</NavLink><NavLink to="/improper-redactions">Redaction audit</NavLink>
       </nav>
     </header>
   </>
 }
 
 function Footer() {
-  return <footer><div><strong>Election Release Archive</strong><p>A neutral evidence browser. Source text and editorial metadata are labeled separately.</p></div><div className="footer-links"><Link to="/collections">Collections</Link><Link to="/search">Search</Link><a href="/admin/">Reviewer access</a></div></footer>
+  return <footer><div><strong>Election Release Archive</strong><p>A neutral evidence browser. Source text and editorial metadata are labeled separately.</p></div><div className="footer-links"><Link to="/collections">Collections</Link><Link to="/search">Search</Link><Link to="/improper-redactions">Redaction audit</Link><a href="/admin/">Reviewer access</a></div></footer>
 }
 
 function Layout({ children }: { children: React.ReactNode }) {
@@ -67,6 +67,7 @@ function HomePage() {
   const collections = useLoad(() => api.collections().then(x => x.results), [], collectionFallback)
   const stats = useLoad(api.stats, [], { totals: { source_files: 0, documents: 0, pages: 0, searchable_pages: 0 }, recent_documents: [] })
   const topics = useLoad(api.topics, [], [])
+  const redactionAudit = useLoad(api.redactionAudit, [])
   const totals = stats.data?.totals || {}
   return <>
     <section className="hero">
@@ -83,6 +84,8 @@ function HomePage() {
     </section>
 
     <TopicCloud topics={topics.data || []} />
+
+    <RedactionAuditPreview audit={redactionAudit.data} />
 
     <section className="collections-section">
       <div className="section-heading"><div><span className="kicker">THE SOURCE COLLECTIONS</span><h2>Four bodies of evidence</h2></div><p>Each collection preserves its original source context while exposing document- and page-level records for review.</p></div>
@@ -108,6 +111,15 @@ function HomePage() {
       {stats.data?.recent_documents?.length ? <div className="document-list">{stats.data.recent_documents.map(doc => <DocumentRow key={doc.stable_id} document={doc} />)}</div> : <EmptyArchive />}
     </section>
   </>
+}
+
+function RedactionAuditPreview({ audit }: { audit?: RedactionAudit }) {
+  const count = audit?.audit.confirmed_finding_count ?? 0
+  return <section className="redaction-preview">
+    <div className="redaction-preview-icon"><ScanSearch /></div>
+    <div><span className="kicker light">PDF FORENSICS</span><h2>Improperly redacted</h2><p>{count ? `${count} reviewed redaction ${count === 1 ? 'failure has' : 'failures have'} recoverable text in the public PDF.` : 'No recoverable text has been confirmed beneath redactions in the current release.'}</p></div>
+    <div className="redaction-preview-status"><strong>{count}</strong><span>confirmed findings</span><Link to="/improper-redactions">View audit and methodology <ArrowRight /></Link></div>
+  </section>
 }
 
 function TopicCloud({ topics }: { topics: Topic[] }) {
@@ -276,8 +288,32 @@ function ClaimPage() {
   return <PageShell eyebrow="CLAIM RECORD" title={claim.data?.title || 'Claim record'} intro={claim.data?.normalized_claim_text || 'Claims are presented with status, evidence classification, and page-level citations. An allegation is never displayed as a confirmed fact.'}>{claim.data?.citations?.map((c: any) => <Link className="result-card" to={c.page_url} key={c.id}><span className={`claim-status ${c.relationship_type}`}>{c.relationship_type}</span><p>{c.excerpt}</p></Link>) || <EmptyArchive />}</PageShell>
 }
 
+function ImproperRedactionsPage() {
+  const result = useLoad(api.redactionAudit, [])
+  const audit = result.data?.audit
+  const findings = result.data?.results || []
+  return <div className="redaction-page page-shell">
+    <section className="page-intro"><span className="kicker">PDF FORENSICS</span><h1>Improperly redacted</h1><p>This section publishes only human-reviewed cases where text remains recoverable from the released PDF itself. It does not attempt to reconstruct material that was properly removed.</p></section>
+    <section className="audit-summary">
+      <div className="audit-verdict"><ScanSearch /><div><span>Current audit status</span><h2>{audit?.status === 'confirmed_findings' ? `${audit.confirmed_finding_count} confirmed ${audit.confirmed_finding_count === 1 ? 'finding' : 'findings'}` : 'No confirmed failures found'}</h2></div></div>
+      <div className="audit-facts"><span><strong>{audit?.source_count ?? 55}</strong> original PDFs</span><span><strong>SHA-256</strong> verified</span><span><strong>{audit?.completed_on || '2026-07-18'}</strong> audit date</span></div>
+      <p>{audit?.summary || 'The forensic audit is loading.'}</p>
+    </section>
+    <section className="audit-methods"><span className="kicker">WHAT WAS CHECKED</span><div>{['Text beneath opaque rectangles', 'Live redaction annotations', 'Hidden OCR and text layers', 'Optional PDF layers', 'Embedded files and attachments', 'Earlier incremental revisions'].map((method, index) => <span key={method}><b>{String(index + 1).padStart(2, '0')}</b>{method}</span>)}</div></section>
+    <section className="redaction-findings">
+      <div className="section-heading"><div><span className="kicker">REVIEWED RESULTS</span><h2>Recoverable source text</h2></div><p>Every published entry links to the exact document page and identifies how the text remained accessible.</p></div>
+      {result.loading ? <LoadingRows /> : findings.length ? findings.map(finding => <article className="redaction-finding" key={finding.id}>
+        <div className="result-kicker"><span>{finding.collection_title}</span><span>{finding.stable_page_id}</span></div>
+        <h3>{finding.document_title}</h3><p>{finding.public_explanation}</p>
+        <blockquote><span>Text recoverable from the released PDF</span>{finding.recovered_text}</blockquote>
+        <div className="finding-meta"><span>{finding.method_label}</span><code>SHA-256 {finding.source_sha256.slice(0, 12)}…</code><Link to={finding.page_url}>Open source page <ExternalLink /></Link></div>
+      </article>) : <div className="audit-empty"><ShieldCheck /><div><h3>No text to expose from the current release</h3><p>The automated scan produced no confirmed redaction failures after visual review. This section will populate only when a finding is verified and deliberately marked for publication.</p></div></div>}
+    </section>
+  </div>
+}
+
 function NotFound() { return <PageShell eyebrow="404" title="Record not found" intro="The requested archive record does not exist or has not been imported."><Link className="download-button" to="/">Return home</Link></PageShell> }
 
 export default function App() {
-  return <><ApiWakeScreen /><Layout><Routes><Route path="/" element={<HomePage />} /><Route path="/collections" element={<CollectionsIndex />} /><Route path="/collections/:slug" element={<CollectionPage />} /><Route path="/search" element={<SearchPage />} /><Route path="/documents/:id" element={<DocumentPage />} /><Route path="/documents/:id/pages/:page" element={<DocumentPage />} /><Route path="/entities/:slug" element={<EntityPage />} /><Route path="/claims/:slug" element={<ClaimPage />} /><Route path="*" element={<NotFound />} /></Routes></Layout></>
+  return <><ApiWakeScreen /><Layout><Routes><Route path="/" element={<HomePage />} /><Route path="/collections" element={<CollectionsIndex />} /><Route path="/collections/:slug" element={<CollectionPage />} /><Route path="/search" element={<SearchPage />} /><Route path="/improper-redactions" element={<ImproperRedactionsPage />} /><Route path="/documents/:id" element={<DocumentPage />} /><Route path="/documents/:id/pages/:page" element={<DocumentPage />} /><Route path="/entities/:slug" element={<EntityPage />} /><Route path="/claims/:slug" element={<ClaimPage />} /><Route path="*" element={<NotFound />} /></Routes></Layout></>
 }

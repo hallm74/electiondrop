@@ -2,7 +2,7 @@ from django.contrib import admin
 
 from .models import (
     Claim, ClaimCitation, Collection, Document, DocumentRelationship, EditorialMetadata,
-    Entity, EntityMention, ImportRun, Page, SourceFile,
+    Entity, EntityMention, ImportRun, Page, RedactionFinding, SourceFile,
 )
 
 
@@ -64,6 +64,15 @@ class PageAdmin(admin.ModelAdmin):
     search_fields = ("stable_page_id", "extracted_text", "ocr_text", "printed_page_label")
     readonly_fields = ("stable_page_id", "preferred_searchable_text")
     autocomplete_fields = ("document", "source_file")
+
+
+@admin.register(RedactionFinding)
+class RedactionFindingAdmin(admin.ModelAdmin):
+    list_display = ("page", "method", "review_state", "published", "created_at")
+    list_filter = ("method", "review_state", "published", "page__document__collection")
+    search_fields = ("page__stable_page_id", "page__document__stable_id", "recovered_text", "public_explanation")
+    autocomplete_fields = ("page",)
+    readonly_fields = ("created_at",)
 
 
 @admin.register(Entity)

@@ -16,6 +16,7 @@ router.register("document-relationships", views.RelationshipViewSet, basename="d
 
 urlpatterns = [
     path("topics/", views.topics, name="topics"),
+    path("redaction-audit/", views.redaction_audit, name="redaction-audit"),
     path("", include(router.urls)),
     path("search/", views.search, name="search"),
     path("statistics/", views.statistics, name="statistics"),

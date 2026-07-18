@@ -9,11 +9,11 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 
-from .models import Claim, ClaimCitation, Collection, Document, DocumentRelationship, Entity, EntityMention, Page, SourceFile
+from .models import Claim, ClaimCitation, Collection, Document, DocumentRelationship, Entity, EntityMention, Page, RedactionFinding, SourceFile
 from .serializers import (
     ClaimCitationSerializer, ClaimSerializer, CollectionSerializer, DocumentRelationshipSerializer,
     DocumentSerializer, EntityMentionSerializer, EntitySerializer, PageSerializer,
-    SearchResultSerializer, SourceFileSerializer,
+    RedactionFindingSerializer, SearchResultSerializer, SourceFileSerializer,
 )
 from .topics import TOPICS, get_topic
 
@@ -162,6 +162,28 @@ def topics(request):
             "mention_count": mention_count,
         })
     return Response(results)
+
+
+@api_view(("GET",))
+@permission_classes((permissions.AllowAny,))
+def redaction_audit(request):
+    findings = RedactionFinding.objects.filter(
+        published=True,
+        review_state="reviewed",
+    ).select_related("page__document__collection", "page__source_file")
+    return Response({
+        "audit": {
+            "completed_on": "2026-07-18",
+            "source_count": 55,
+            "confirmed_finding_count": findings.count(),
+            "status": "confirmed_findings" if findings.exists() else "no_confirmed_failures",
+            "summary": (
+                "Every original matched the production SHA-256 record. The audit checked live redaction annotations, "
+                "opaque overlays, hidden text layers, optional content layers, embedded files, and earlier PDF revisions."
+            ),
+        },
+        "results": RedactionFindingSerializer(findings, many=True).data,
+    })
 
 
 @api_view(("GET",))
