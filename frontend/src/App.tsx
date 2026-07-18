@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { Link, NavLink, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronRight, Copy, Download, ExternalLink, FileSearch, Filter, Menu, Search, ShieldCheck, X } from 'lucide-react'
-import { api } from './api'
+import { api, getApiLoading, subscribeApiLoading } from './api'
 import type { Collection, Document, Page, SearchResult } from './types'
 
 const collectionFallback: Collection[] = [
@@ -173,6 +173,22 @@ function SearchResultCard({ result, query }: { result: SearchResult; query: stri
 
 function LoadingRows() { return <>{[1, 2, 3].map(x => <div className="loading-row" key={x}><span></span><span></span><span></span></div>)}</> }
 
+function ApiWakeScreen() {
+  const loading = useSyncExternalStore(subscribeApiLoading, getApiLoading, getApiLoading)
+  if (!loading) return null
+  return <div className="api-wake-screen" role="status" aria-live="polite" aria-label="The archive is waking up">
+    <div className="wake-art" aria-hidden="true">
+      <div className="wake-ring ring-one"></div><div className="wake-ring ring-two"></div>
+      <div className="ballot-paper paper-one"><span></span><span></span><span></span></div>
+      <div className="ballot-paper paper-two"><span></span><span></span><span></span></div>
+      <div className="ballot-box"><i></i><b>ERA</b></div>
+    </div>
+    <span className="kicker light">WAKING THE PUBLIC RECORDS VAULT</span>
+    <h2>Election secrets incoming<span className="wake-dots"><i>.</i><i>.</i><i>.</i></span></h2>
+    <p>The archive took a quick power nap. Reassembling documents, citations, and suspiciously well-organized PDFs.</p>
+  </div>
+}
+
 function PdfCanvas({ url, pageNumber, fallbackUrl, fallbackLoading }: { url: string; pageNumber: number; fallbackUrl?: string; fallbackLoading?: boolean }) {
   const canvas = useRef<HTMLCanvasElement>(null)
   const [status, setStatus] = useState<'loading' | 'rendered' | 'failed'>('loading')
@@ -235,5 +251,5 @@ function ClaimPage() {
 function NotFound() { return <PageShell eyebrow="404" title="Record not found" intro="The requested archive record does not exist or has not been imported."><Link className="download-button" to="/">Return home</Link></PageShell> }
 
 export default function App() {
-  return <Layout><Routes><Route path="/" element={<HomePage />} /><Route path="/collections" element={<CollectionsIndex />} /><Route path="/collections/:slug" element={<CollectionPage />} /><Route path="/search" element={<SearchPage />} /><Route path="/documents/:id" element={<DocumentPage />} /><Route path="/documents/:id/pages/:page" element={<DocumentPage />} /><Route path="/entities/:slug" element={<EntityPage />} /><Route path="/claims/:slug" element={<ClaimPage />} /><Route path="*" element={<NotFound />} /></Routes></Layout>
+  return <><ApiWakeScreen /><Layout><Routes><Route path="/" element={<HomePage />} /><Route path="/collections" element={<CollectionsIndex />} /><Route path="/collections/:slug" element={<CollectionPage />} /><Route path="/search" element={<SearchPage />} /><Route path="/documents/:id" element={<DocumentPage />} /><Route path="/documents/:id/pages/:page" element={<DocumentPage />} /><Route path="/entities/:slug" element={<EntityPage />} /><Route path="/claims/:slug" element={<ClaimPage />} /><Route path="*" element={<NotFound />} /></Routes></Layout></>
 }

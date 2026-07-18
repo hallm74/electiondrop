@@ -8,7 +8,7 @@ A neutral, source-first browser for the election-integrity document collections 
 - API: https://electiondrop-api.fly.dev/api/
 - Media: Linode Object Storage (`electiondrop-archive`)
 
-The React frontend is deployed on Netlify. Django runs on one 256 MB Fly.io machine configured to stop when idle, and the read-only archive fixture is restored whenever a fresh machine image starts.
+The React frontend is deployed on Netlify. Django runs on one 256 MB Fly.io machine configured to suspend when idle and resume on request, and the read-only archive fixture is restored whenever a fresh machine image starts.
 
 For local Fly management without an interactive login, use the app-scoped deploy token stored in macOS Keychain:
 

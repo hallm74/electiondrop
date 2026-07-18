@@ -3,21 +3,71 @@ import type { Collection, Document, Page, Paginated, SearchResult } from './type
 export const API = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api').replace(/\/$/, '')
 
 const RETRYABLE_STATUS = new Set([429, 502, 503, 504])
+const loadingSubscribers = new Set<() => void>()
+let activeRequests = 0
+let loadingVisible = false
+let loadingTimer: number | undefined
+
+export function subscribeApiLoading(callback: () => void) {
+  loadingSubscribers.add(callback)
+  return () => loadingSubscribers.delete(callback)
+}
+
+export function getApiLoading() {
+  return loadingVisible
+}
+
+function notifyLoading() {
+  loadingSubscribers.forEach(callback => callback())
+}
+
+function beginRequest() {
+  activeRequests += 1
+  if (activeRequests === 1) {
+    loadingTimer = window.setTimeout(() => {
+      if (activeRequests > 0) {
+        loadingVisible = true
+        notifyLoading()
+      }
+    }, 350)
+  }
+}
+
+function endRequest() {
+  activeRequests = Math.max(0, activeRequests - 1)
+  if (activeRequests === 0) {
+    if (loadingTimer !== undefined) window.clearTimeout(loadingTimer)
+    loadingTimer = undefined
+    if (loadingVisible) {
+      loadingVisible = false
+      notifyLoading()
+    }
+  }
+}
 
 async function request<T>(path: string): Promise<T> {
+  beginRequest()
   let lastError: unknown
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    try {
-      const response = await fetch(`${API}${path}`, { headers: { Accept: 'application/json' } })
-      if (response.ok) return response.json()
-      if (!RETRYABLE_STATUS.has(response.status)) throw new Error(`Request failed: ${response.status}`)
-      lastError = new Error(`Request failed: ${response.status}`)
-    } catch (error) {
-      lastError = error
+  try {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      let response: Response | undefined
+      try {
+        response = await fetch(`${API}${path}`, { headers: { Accept: 'application/json' } })
+      } catch (error) {
+        lastError = error
+      }
+      if (response) {
+        if (response.ok) return response.json()
+        const responseError = new Error(`Request failed: ${response.status}`)
+        if (!RETRYABLE_STATUS.has(response.status)) throw responseError
+        lastError = responseError
+      }
+      if (attempt < 4) await new Promise(resolve => window.setTimeout(resolve, 500 * (2 ** attempt)))
     }
-    if (attempt < 4) await new Promise(resolve => window.setTimeout(resolve, 500 * (2 ** attempt)))
+    throw lastError instanceof Error ? lastError : new Error('Request failed')
+  } finally {
+    endRequest()
   }
-  throw lastError instanceof Error ? lastError : new Error('Request failed')
 }
 
 export const api = {
