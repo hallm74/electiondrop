@@ -173,11 +173,12 @@ function SearchResultCard({ result, query }: { result: SearchResult; query: stri
 
 function LoadingRows() { return <>{[1, 2, 3].map(x => <div className="loading-row" key={x}><span></span><span></span><span></span></div>)}</> }
 
-function PdfCanvas({ url, pageNumber, fallbackUrl }: { url: string; pageNumber: number; fallbackUrl?: string }) {
+function PdfCanvas({ url, pageNumber, fallbackUrl, fallbackLoading }: { url: string; pageNumber: number; fallbackUrl?: string; fallbackLoading?: boolean }) {
   const canvas = useRef<HTMLCanvasElement>(null)
-  const [failed, setFailed] = useState(false)
+  const [status, setStatus] = useState<'loading' | 'rendered' | 'failed'>('loading')
   useEffect(() => {
     let cancelled = false
+    setStatus('loading')
     async function render() {
       try {
         const pdfjs = await import('pdfjs-dist')
@@ -188,11 +189,15 @@ function PdfCanvas({ url, pageNumber, fallbackUrl }: { url: string; pageNumber: 
         if (!canvas.current || cancelled) return
         canvas.current.width = viewport.width; canvas.current.height = viewport.height
         await page.render({ canvas: canvas.current, canvasContext: canvas.current.getContext('2d')!, viewport }).promise
-      } catch { if (!cancelled) setFailed(true) }
+        if (!cancelled) setStatus('rendered')
+      } catch { if (!cancelled) setStatus('failed') }
     }
     render(); return () => { cancelled = true }
   }, [url, pageNumber])
-  return failed ? (fallbackUrl ? <img src={fallbackUrl} alt={`Original page ${pageNumber}`} /> : <div className="pdf-fallback"><BookOpen /><p>Preview unavailable. The preserved original can still be downloaded.</p></div>) : <canvas ref={canvas} />
+  if (status === 'failed' && fallbackUrl) return <img src={fallbackUrl} alt={`Original page ${pageNumber}`} />
+  if (status === 'failed' && fallbackLoading) return <div className="pdf-fallback"><BookOpen /><p>Loading preserved page preview…</p></div>
+  if (status === 'failed') return <div className="pdf-fallback"><BookOpen /><p>Preview unavailable. The preserved original can still be downloaded.</p></div>
+  return <canvas ref={canvas} aria-busy={status === 'loading'} />
 }
 
 function DocumentPage() {
@@ -211,7 +216,7 @@ function DocumentPage() {
     <div className="document-header"><div className="breadcrumbs"><Link to={`/collections/${doc.collection.slug}`}>{doc.collection.title}</Link><ChevronRight /><span>{doc.stable_id}</span></div><div className="document-title-row"><div><span className="mono">{doc.stable_id}</span><h1>{doc.title}</h1><ProvenanceBadge source={doc.title_source} /></div><a className="download-button" href={api.sourceDownload(doc.source_file)}><Download /> Original PDF</a></div><div className="document-facts"><span><small>Agency</small>{doc.originating_agency || 'Not established'} <ProvenanceBadge source={doc.agency_source} /></span><span><small>Date</small>{doc.document_date || 'Not established'} <ProvenanceBadge source={doc.date_source} /></span><span><small>Document type</small>{doc.document_type || 'Pending review'}</span><span><small>Source hash</small><code>{doc.source_sha256.slice(0, 12)}…</code></span></div></div>
     <div className="viewer-toolbar"><div><button onClick={() => go(currentNumber - 1)} disabled={currentNumber <= 1} aria-label="Previous page"><ArrowLeft /></button><span>Page <input value={currentNumber} onChange={e => go(Number(e.target.value))} aria-label="Current page" /> of {total}</span><button onClick={() => go(currentNumber + 1)} disabled={currentNumber >= total} aria-label="Next page"><ArrowRight /></button></div><button onClick={() => navigator.clipboard.writeText(window.location.href)}><Copy /> Copy page link</button></div>
     <div className="split-viewer">
-      <section className="pdf-pane" aria-label="Original document page"><div className="paper"><PdfCanvas url={api.sourceDownload(doc.source_file)} pageNumber={currentNumber} fallbackUrl={current?.image_url} /></div></section>
+      <section className="pdf-pane" aria-label="Original document page"><div className="paper"><PdfCanvas url={api.sourcePreview(doc.source_file)} pageNumber={currentNumber} fallbackUrl={current?.image_url} fallbackLoading={pages.loading} /></div></section>
       <section className="text-pane"><div className="text-pane-head"><div><span className="kicker">SEARCHABLE TRANSCRIPT</span><h2>{current?.stable_page_id || `${doc.stable_id}-P${String(currentNumber).padStart(3, '0')}`}</h2></div><span className={`method ${current?.extraction_method || 'none'}`}>{current?.extraction_method === 'ocr' ? 'OCR text' : current?.extraction_method === 'embedded' ? 'Embedded text' : 'No extracted text'}</span></div><div className="source-note"><Check /> This panel reproduces extracted source text. Editorial metadata is labeled elsewhere.</div><article className="transcript">{current?.preferred_searchable_text || 'No usable embedded text was found on this page. It has been queued for OCR and human review.'}</article></section>
     </div>
   </div>

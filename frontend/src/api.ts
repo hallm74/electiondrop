@@ -2,10 +2,22 @@ import type { Collection, Document, Page, Paginated, SearchResult } from './type
 
 export const API = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api').replace(/\/$/, '')
 
+const RETRYABLE_STATUS = new Set([429, 502, 503, 504])
+
 async function request<T>(path: string): Promise<T> {
-  const response = await fetch(`${API}${path}`, { headers: { Accept: 'application/json' } })
-  if (!response.ok) throw new Error(`Request failed: ${response.status}`)
-  return response.json()
+  let lastError: unknown
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      const response = await fetch(`${API}${path}`, { headers: { Accept: 'application/json' } })
+      if (response.ok) return response.json()
+      if (!RETRYABLE_STATUS.has(response.status)) throw new Error(`Request failed: ${response.status}`)
+      lastError = new Error(`Request failed: ${response.status}`)
+    } catch (error) {
+      lastError = error
+    }
+    if (attempt < 4) await new Promise(resolve => window.setTimeout(resolve, 500 * (2 ** attempt)))
+  }
+  throw lastError instanceof Error ? lastError : new Error('Request failed')
 }
 
 export const api = {
@@ -18,5 +30,6 @@ export const api = {
   stats: () => request<{ totals: Record<string, number>; recent_documents: Document[] }>('/statistics/'),
   entity: (slug: string) => request<any>(`/entities/${slug}/`),
   claims: (slug: string) => request<any>(`/claims/${slug}/`),
-  sourceDownload: (id: number) => `${API}/source-files/${id}/download/`,
+  sourcePreview: (id: number) => `${API}/source-files/${id}/download/`,
+  sourceDownload: (id: number) => `${API}/source-files/${id}/download/?download=1`,
 }

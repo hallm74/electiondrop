@@ -114,3 +114,15 @@ class RelationshipAndApiTests(TestCase):
     def test_api_is_read_only_for_anonymous_users(self):
         response = self.client.post("/api/collections/", {"slug": "x", "code": "X", "title": "X"}, format="json")
         self.assertEqual(response.status_code, 403)
+
+    def test_source_preview_is_inline(self):
+        response = self.client.get(f"/api/source-files/{self.source.pk}/download/")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response["Content-Disposition"].startswith("inline;"))
+        response.close()
+
+    def test_source_download_is_attachment(self):
+        response = self.client.get(f"/api/source-files/{self.source.pk}/download/", {"download": "1"})
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response["Content-Disposition"].startswith("attachment;"))
+        response.close()

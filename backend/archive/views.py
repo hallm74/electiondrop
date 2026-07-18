@@ -74,7 +74,13 @@ class SourceFileViewSet(BaseViewSet):
         source = self.get_object()
         if not source.stored_file:
             raise Http404
-        response = FileResponse(source.stored_file.open("rb"), content_type=source.mime_type, as_attachment=True, filename=source.original_filename)
+        as_attachment = request.query_params.get("download") == "1"
+        response = FileResponse(
+            source.stored_file.open("rb"),
+            content_type=source.mime_type,
+            as_attachment=as_attachment,
+            filename=source.original_filename,
+        )
         response["X-Content-Type-Options"] = "nosniff"
         return response
 
